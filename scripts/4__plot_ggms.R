@@ -22,7 +22,7 @@ plot_graphs <- function(G,
     set.seed(123)
     # Used if we want a identical layout between each plot
     if(identical_layouts) {
-        l <- layout.fruchterman.reingold(G[[1]], niter=10000)
+        l <- layout_nicely(G[[1]])
         coords <- tkplot(G[[1]], layout = l, vertex.size = 0)
         l <- tkplot.getcoords(coords)
     } else {
@@ -35,7 +35,7 @@ plot_graphs <- function(G,
     par(family = "myfont")
     par(mar = c(.5, .5, 2, .5) + .1)
     par(mfrow = c(1, 2))
-    
+
     
     
     ccols = list(brewer.pal(12, "Paired")[1:6], brewer.pal(12, "Paired")[6:12])
@@ -70,15 +70,15 @@ plot_graphs <- function(G,
             
             # Color only communities we want to keep
             cols[c_keep_ids] <- alpha(ccols[[i]][1:length(c_keep_ids)], .7)
-            
-            #V(g)$label <- NA
+        
+            V(g)$label <- NA
             V(g)$color = "lightgray"
             
             # Plot the graph
             
             set.seed(123)
             lout <- layout.fruchterman.reingold(g, niter=10000)
-            
+
             community_membership <- membership(lou)
             node_community_mapping <- data.table(node = names(community_membership), community = community_membership)
             
@@ -108,7 +108,7 @@ plot_graphs <- function(G,
             V(g)$color = "lightgray"
             # Plot the graph (without mark.border and mark.col)
             set.seed(123)
-            plot(g, layout = l,
+            plot(g, layout = layout.fruchterman.reingold(g, niter=10000),
                  vertex.size = 4,
                  vertex.frame.color = frame_colors,
                  vertex.frame.size = 2,
@@ -135,132 +135,3 @@ plot_graphs <- function(G,
 # $y
 # [1] -0.1119388  0.1487405 -0.5642940 -0.3036147 -0.3879521 -1.1469889
 
-
-est1 = fread("../data/estimates.EARLYOA_vs_HEALTHY.UniProt.Entrez.2023-06-01.txt")
-
-m4 = readRDS("../data/m4.L1_0.1_L2_0.001_ITER_10K_STABILITYSS_1K.rds")
-
-g = m4 %>% jewel_to_igraph()
-#g = m4 %>% jewel_unique_edges()
-
-
-
-
-pdf("../results/m4.identical-layouts.pdf", width = 6, height = 7, pointsize = 6, compress = F)
-g %>% plot_graphs(community_detection = F, identical_layouts = T)
-dev.off()
-
-
-
-
-
-G = m4 %>% jewel_to_igraph()
-
-
-
-m <- names(G[1])
-g = G[[m]]
-
-pclasses <- data.table(SeqId = V(g)$name)
-
-
-pclasses$UniProt <- est1$UniProt[match(pclasses$SeqId, est1$SeqId)]
-pclasses$GeneSymbol <- est1$EntrezGeneSymbol[match(pclasses$SeqId, est1$SeqId)]
-
-pclasses$Classification = pclasses$UniProt %>% panther.classify()
-
-pclasses.healthy = pclasses[Group == "Healthy"]
-pclasses.healthy = merge(pclasses.healthy, healthy.metrics, by.x = "SeqId", by.y = "id")
-
-pclasses.oa = pclasses[Group == "Mild OA"]
-pclasses.oa = merge(pclasses.oa, oa.metrics, by.x = "SeqId", by.y = "id")
-
-pclasses = rbindlist(list(pclasses.healthy, pclasses.oa))
-
-merge(pclasses, est1, by = "SeqId", all.x = T)
-
-pclasses2 = merge(pclasses, est1, by = "SeqId", all.x = T)
-
-pclasses2$Regulation = "Downregulated"
-pclasses2[estimate > 0]$Regulation = "Upregulated"
-
-pclasses2 = pclasses2[, c("Community", "SeqId", "UniProt.x", "GeneSymbol", "Classification", "degree_centrality", "betweenness_centrality", "estimate", "lower.CL", "upper.CL")]
-
-names(pclasses2) = c("Community", "SeqId", "UniProt", "GeneSymbol", "Classification", "Degree", "Betweenness", "Log2 fold-change", "lower.CL", "upper.CL")
-
-fwrite(pclasses2, "../results/m4.unique_edges.communities.classification.txt", sep = "\t")
-
-
-
-
-
-
-
-
-# Read Jewel output
-m4 = readRDS("m4.L1_0.1_L2_0.001_ITER_10K_STABILITYSS_1K.rds")
-
-# Read mapping file
-up = fread(up, "up.txt")
-
-# Source mapping + node id script
-source("get_node_ids.R")
-
-# Map node names (from SeqId to SeqId+Entrez)
-m.entrez = map_node_names_combined(m4, up)
-
-# Get nodes for healthy with unique edges
-m.healthy = get_node_ids(m.entrez, option = "unique")
-m.healthy = m.healthy[[1]]
-
-# Get nodes for OA with unique edges
-m.oa = get_node_ids(m.entrez, option = "unique")
-m.oa = m.oa[[2]]
-
-# Get nodes with edges in healthy and OA
-shared = get_node_ids(m.entrez, option = "shared")
-
-c(m.oa, m.healthy, shared) %>% uniqueN
-
-
-m.healthy %>% sub("\n", "\t", .) %>% clipr::write_clip()
-m.oa  %>% sub("\n", "\t", .) %>% clipr::write_clip()
-shared  %>% sub("\n", "\t", .) %>% clipr::write_clip()
-
-shared[shared %in% intersect(m.healthy, m.oa)]
-
-shared %>% uniqueN
-
-
-
-
-metrics = compute_network_metrics(m4)
-
-healthy.metrics = metrics$HEALTHY
-
-oa.metrics = metrics$EARLYOA
-
-healthy.metrics = merge(healthy.metrics, est1, by.x = "id", by.y = "SeqId")
-oa.metrics = merge(oa.metrics, est1, by.x = "id", by.y = "SeqId")
-
-
-# Compute the metrics
-compute_metrics = function(g) {
-    degree_centrality <- degree(g)
-    betweenness_centrality <- betweenness(g)
-    data.table(id = names(degree_centrality),
-               degree_centrality = degree_centrality,
-               betweenness_centrality = betweenness_centrality)
-}
-
-
-g = m4 %>% jewel_unique_edges()
-
-healthy.metrics = compute_metrics(g$HEALTHY)
-oa.metrics = compute_metrics(g$EARLYOA)
-
-
-
-oa.classes = pclasses2[Community %in% LETTERS[6:11]]
-
-merge(oa.classes, oa.metrics, by.x = "SeqId", by.y = "id") %>% View
