@@ -162,33 +162,3 @@ for(i in 1:length(inds)) {
     
 }
 
-estimates_output_list2 <- estimates_output_list[grep(pattern = "- HEALTHY", contrast)]
-
-up = fread("../lib/up.txt")
-estimates_output_list2 = merge(estimates_output_list2, up, by = "SeqId", all.x = T)
-
-estimates_output_list2$is_diffexp <- F
-
-estimates_output_list2[(lower.CL < 0 & upper.CL < 0) | (lower.CL > 0 & upper.CL > 0)]$is_diffexp <- T
-
-estimates_output_list2$CI_Width = estimates_output_list2$upper.CL - estimates_output_list2$lower.CL
-
-fwrite(estimates_output_list2, "../results/estimates.UniProt.Entrez.2023-10-29.txt", sep = "\t")
-
-estimates_output_list2 = estimates_output_list2[contrast == "MILD.DEGENERATION - HEALTHY"]
-
-fwrite(estimates_output_list2, "../results/estimates.EARLYOA_vs_HEALTHY.UniProt.Entrez.2023-10-29.txt", sep = "\t")
-
-# Select top 800
-
-lfq <- fread("../data/lfq-LOD.adjusted.txt")
-
-lfq <- lfq[SeqId %in% estimates_output_list2$SeqId]
-
-lfq = dcast(lfq, formula = SeqId ~ variable, value.var = "value")
-
-lfq = lfq[complete.cases(lfq)]
-
-c1 = c1[order(abs(estimate), decreasing = T)][1:800]
-
-fwrite(c1, "../results/selected.aptamers.txt", sep = "\t")
